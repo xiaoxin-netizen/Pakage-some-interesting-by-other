@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>今日色环 / Daily Color Circle</title>
+<style>
+  /* ========== 全局基础 ========== */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+                 "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #FAF6EE; /* 米白/浅奶油底 */
+    color: #3A3630;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input { font-family: inherit; color: inherit; }
+
+  /* ========== 页面切换 ========== */
+  .page { display: none; min-height: 100%; }
+  .page.active { display: block; }
+
+  /* ========== 主页 ========== */
+  #page-home {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    padding: max(16px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+  }
+  #page-home.active { display: flex; }
+
+  /* 顶部两个入口卡片 */
+  .entries { display: flex; gap: 14px; width: 100%; max-width: 420px; margin-top: 8px; }
+  .entry-card {
+    flex: 1;
+    background: #FFFDF8;
+    border: 1px solid #EFE7D6;
+    border-radius: 16px;
+    padding: 14px 10px;
+    text-align: center;
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: #5A5347;
+    box-shadow: 0 2px 8px rgba(180, 165, 120, 0.12);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .entry-card:active { transform: scale(0.97); }
+  .entry-card .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .entry-card.cal .dot { background: #4A7BD0; }
+  .entry-card.note .dot { background: #FFB84D; }
+
+  /* 中间大圆圈 */
+  .circle-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 22px 0 10px; width: 100%; }
+  #circle {
+    width: min(74vw, 320px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: #FFD84D;
+    box-shadow: 0 10px 34px rgba(230, 190, 60, 0.35);
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    padding: 8%;
+    cursor: pointer;
+    transition: background-color 0.8s ease, box-shadow 0.4s ease, transform 0.2s ease;
+    animation: breathe 5s ease-in-out infinite;
+  }
+  #circle:active { transform: scale(0.98); }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.018); }
+  }
+  .circle-inner { pointer-events: none; }
+  #date-text { font-size: clamp(16px, 4.6vw, 20px); font-weight: 600; letter-spacing: 1px; }
+  #count-line { margin-top: 8px; font-size: clamp(12px, 3.4vw, 14px); opacity: 0.85; }
+  #daily-rec {
+    margin-top: 12px;
+    font-size: clamp(11px, 3vw, 13px);
+    line-height: 1.7;
+    max-width: 100%;
+  }
+  .hint { margin-top: 18px; font-size: 12px; color: #A79C86; letter-spacing: 2px; }
+
+  /* ========== 今日记录页 ========== */
+  #page-record { min-height: 100vh; display: none; flex-direction: column; }
+  #page-record.active { display: flex; }
+  .record-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: max(14px, env(safe-area-inset-top)) 16px 14px;
+  }
+  .back-btn {
+    width: 36px; height: 36px; border-radius: 12px;
+    background: #FFFDF8; border: 1px solid #EFE7D6;
+    font-size: 18px; line-height: 1; color: #5A5347;
+    flex-shrink: 0;
+  }
+  .record-title { font-size: 16px; font-weight: 600; letter-spacing: 1px; }
+
+  /* 左右分半：移动端也保持左右布局 */
+  .record-cols { flex: 1; display: flex; align-items: stretch; padding: 0 8px 24px; gap: 8px; }
+  .col { flex: 1 1 0; min-width: 0; border-radius: 16px; padding: 14px 10px 18px; display: flex; flex-direction: column; }
+  .col-high { background: rgba(255, 90, 95, 0.06); border: 1px solid rgba(255, 90, 95, 0.14); }
+  .col-down { background: rgba(74, 123, 208, 0.06); border: 1px solid rgba(74, 123, 208, 0.14); }
+  .col h2 {
+    font-size: clamp(15px, 4.2vw, 19px);
+    letter-spacing: 3px; text-align: center; margin-bottom: 4px;
+  }
+  .col-high h2 { color: #FF5A5F; }
+  .col-down h2 { color: #4A7BD0; }
+  .col-sub { text-align: center; font-size: 11px; color: #A79C86; margin-bottom: 12px; letter-spacing: 1px; }
+
+  /* 已添加事项：横线手账感 */
+  .item-list { list-style: none; flex: 0 0 auto; }
+  .item-list li {
+    border-bottom: 1px solid rgba(120, 110, 90, 0.18);
+    padding: 7px 2px;
+    font-size: clamp(12px, 3.3vw, 14px);
+    line-height: 1.45;
+    word-break: break-all;
+    animation: fadeIn 0.25s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+  .item-main { display: flex; align-items: center; gap: 6px; }
+  .item-list .item-text { flex: 1; min-width: 0; }
+  .item-edit { flex-shrink: 0; font-size: 13px; color: #B3A88F; line-height: 1; }
+  /* 事项操作行：批注 / 自查 */
+  .item-actions { display: flex; gap: 14px; margin-top: 3px; padding-left: 2px; }
+  .item-actions button { font-size: 11px; color: #B3A88F; letter-spacing: 1px; }
+  /* 事项批注 */
+  .anno-btn { flex-shrink: 0; font-size: 11px; color: #B3A88F; margin-left: 2px; }
+  .anno-box { display: flex; gap: 6px; margin-top: 6px; padding-left: 4px; }
+  .anno-box.hidden { display: none; }
+  .edit-box { display: flex; gap: 6px; margin-top: 6px; padding-left: 4px; }
+  .edit-box.hidden { display: none; }
+  .anno-box input,
+  .edit-box input {
+    flex: 1; min-width: 0; background: transparent; border: none;
+    border-bottom: 1px dashed rgba(120,110,90,0.4); padding: 4px 2px;
+    font-size: 12px; outline: none;
+  }
+  .anno-save { flex-shrink: 0; font-size: 11px; padding: 4px 10px; border-radius: 8px; background: #B9A06A; color: #fff; }
+  .anno-show { font-size: 11px; color: #9A8F76; margin-top: 4px; padding-left: 4px; white-space: pre-wrap; word-break: break-all; }
+  .day-anno { font-size: 11px; color: #9A8F76; margin-top: 3px; }
+  /* Down 自查小清单 */
+  .check-box { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; padding: 8px 10px; background: rgba(74,123,208,0.05); border-radius: 10px; }
+  .check-box.hidden { display: none; }
+  .check-row { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #5A5347; }
+  .check-row input { width: 15px; height: 15px; accent-color: #4A7BD0; }
+
+  /* 给未来的自己一句话 */
+  .future-card {
+    background: #FFFDF8; border: 1px solid #EFE7D6; border-radius: 14px;
+    padding: 10px 14px; margin: 0 8px 12px;
+  }
+  .future-label { font-size: 12px; font-weight: 600; letter-spacing: 1px; color: #8A7B4E; margin-bottom: 6px; }
+  .future-row { display: flex; gap: 8px; align-items: center; }
+  .future-row input {
+    flex: 1; min-width: 0; background: transparent; border: none;
+    border-bottom: 1px dashed rgba(120,110,90,0.4); padding: 5px 2px; font-size: 13px; outline: none;
+  }
+  .future-row button { flex-shrink: 0; font-size: 12px; padding: 5px 14px; border-radius: 9px; background: #FFD84D; color: #5A4A10; font-weight: 600; }
+  .future-saved { font-size: 12px; color: #6B6453; margin-top: 6px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+
+  /* 主页问候语 */
+  .greeting {
+    max-width: 320px; text-align: center;
+    font-size: clamp(13px, 3.6vw, 15px); color: #6B6453;
+    line-height: 1.7; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  /* 记录页今日小提示（可选看） */
+  .tip-card {
+    background: #FFFDF8; border: 1px solid #EFE7D6; border-radius: 14px;
+    padding: 10px 14px; margin: 4px 8px 12px; font-size: 13px; color: #5A5347;
+  }
+  .tip-head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; letter-spacing: 1px; }
+  .tip-head button { font-size: 11px; color: #A79C86; }
+  .tip-body { margin-top: 6px; line-height: 1.6; }
+  .tip-body.hidden { display: none; }
+  #tip-refresh { margin-top: 6px; font-size: 11px; color: #C08A2D; letter-spacing: 1px; display: inline-block; }
+  .item-list .item-time { font-size: 10px; color: #B3A88F; flex-shrink: 0; }
+  .item-del {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    font-size: 13px; color: #B3A88F; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .item-del:active { background: rgba(0,0,0,0.06); }
+  .empty-tip { font-size: 11px; color: #C4BAA2; text-align: center; padding: 10px 0; letter-spacing: 1px; }
+
+  /* 输入行 */
+  .add-row { display: flex; gap: 6px; margin-top: 14px; align-items: center; }
+  .add-row input {
+    flex: 1; min-width: 0;
+    background: transparent;
+    border: none; border-bottom: 1px solid rgba(120, 110, 90, 0.3);
+    padding: 7px 2px;
+    font-size: clamp(12px, 3.3vw, 14px);
+    outline: none;
+  }
+  .add-row input:focus { border-bottom-color: currentColor; }
+  .col-high .add-row input:focus { border-bottom-color: #FF5A5F; }
+  .col-down .add-row input:focus { border-bottom-color: #4A7BD0; }
+  .add-btn {
+    flex-shrink: 0; padding: 6px 12px; border-radius: 10px;
+    font-size: 12px; letter-spacing: 1px; color: #FFFDF8;
+  }
+  .col-high .add-btn { background: #FF5A5F; }
+  .col-down .add-btn { background: #4A7BD0; }
+
+  /* ========== 弹层（日历 / 碎碎念 / 日期详情） ========== */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: #FAF6EE;
+    display: none; flex-direction: column;
+    padding: max(14px, env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    animation: slideUp 0.25s ease;
+  }
+  .overlay.active { display: flex; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .overlay-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .overlay-title { font-size: 17px; font-weight: 600; letter-spacing: 2px; flex: 1; }
+
+  /* ---- 日历 ---- */
+  .cal-nav { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 14px; }
+  .cal-nav button { width: 34px; height: 34px; border-radius: 50%; background: #FFFDF8; border: 1px solid #EFE7D6; font-size: 15px; color: #5A5347; }
+  #cal-month-label { font-size: 16px; font-weight: 600; letter-spacing: 1px; min-width: 130px; text-align: center; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; width: 100%; max-width: 420px; margin: 0 auto; }
+  .cal-week { text-align: center; font-size: 11px; color: #A79C86; padding: 6px 0; }
+  .cal-cell {
+    aspect-ratio: 1 / 1; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    background: #FFFDF8; border: 1px solid transparent;
+    position: relative;
+  }
+  .cal-cell .num { font-size: clamp(11px, 3.2vw, 14px); color: #5A5347; }
+  .cal-cell .mini {
+    width: clamp(14px, 4vw, 20px); height: clamp(14px, 4vw, 20px);
+    border-radius: 50%; background: #FFD84D;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+  }
+  .cal-cell.today { border-color: #E0B33C; background: #FFF7DF; }
+  .cal-cell.today .num { font-weight: 700; }
+  .cal-cell.empty { background: transparent; border: none; }
+  .cal-legend { text-align: center; font-size: 11px; color: #A79C86; margin-top: 14px; letter-spacing: 1px; }
+
+  /* ---- 日期详情 ---- */
+  .day-section { margin-bottom: 18px; }
+  .day-section h3 { font-size: 14px; letter-spacing: 2px; margin-bottom: 8px; }
+  .day-section.sec-high h3 { color: #FF5A5F; }
+  .day-section.sec-down h3 { color: #4A7BD0; }
+  .day-section.sec-notes h3 { color: #C08A2D; }
+  .day-list { list-style: none; }
+  .day-list li {
+    background: #FFFDF8; border: 1px solid #EFE7D6; border-radius: 12px;
+    padding: 9px 12px; margin-bottom: 6px;
+    font-size: 13px; line-height: 1.5; word-break: break-all;
+  }
+  .day-list .item-time { font-size: 10px; color: #B3A88F; margin-left: 6px; }
+  .day-none { font-size: 12px; color: #C4BAA2; letter-spacing: 1px; }
+
+  /* ---- 碎碎念 ---- */
+  .note-input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .note-input-row input {
+    flex: 1; min-width: 0;
+    background: #FFFDF8; border: 1px solid #EFE7D6; border-radius: 12px;
+    padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  .note-input-row input:focus { border-color: #E0B33C; }
+  .note-input-row button {
+    background: #FFD84D; border-radius: 12px; padding: 0 18px;
+    font-size: 14px; font-weight: 600; color: #5A4A10;
+  }
+  .note-list { list-style: none; }
+  .note-list li {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: #FFFDF8; border: 1px solid #EFE7D6; border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 8px;
+    animation: fadeIn 0.25s ease;
+  }
+  .note-list .note-body { flex: 1; min-width: 0; }
+  .note-list .note-text { font-size: 14px; line-height: 1.55; word-break: break-all; }
+  .note-list .note-time { font-size: 11px; color: #B3A88F; margin-top: 4px; }
+  .note-list .item-del { margin-top: 2px; }
+</style>
+<style id="__dm_no_drag_style__">* { -webkit-user-drag: none !important; }</style><style id="__dm_bindable_badge_style__">[data-sp-bindable="database"]{outline:1px dashed #0088ff;outline-offset:2px;border-radius:4px;}[data-sp-bindable="database"] *{pointer-events:none !important;transition:none !important;animation:none !important;}[data-sp-bindable="database"]{transition:none !important;animation:none !important;}</style></head>
+<body>
+
+<!-- ================= 主页 ================= -->
+<div id="page-home" class="page active">
+  <!-- 顶部两个入口：点击不触发圆圈跳转 -->
+  <div class="entries">
+    <button class="entry-card cal" id="btn-open-calendar"><span class="dot"></span>日历</button>
+    <button class="entry-card note" id="btn-open-notes"><span class="dot"></span>碎碎念</button>
+  </div>
+
+  <div class="circle-wrap">
+    <div class="greeting" id="greeting"></div>
+    <div id="circle" title="点击记录今天">
+      <div class="circle-inner">
+        <div id="date-text">2026年10月24日 周六</div>
+        <div id="count-line">High 8 · Down 0</div>
+        <div id="daily-rec"></div>
+      </div>
+    </div>
+    <div class="hint">点 击 圆 圈 记 录 今 天</div>
+  </div>
+</div>
+
+<!-- ================= 今日记录页 ================= -->
+<div id="page-record" class="page">
+  <div class="record-header">
+    <button class="back-btn" id="btn-back-home">←</button>
+    <div class="record-title" id="record-date">2026年10月24日 周六</div>
+  </div>
+  <div class="tip-card" id="tip-card">
+    <div class="tip-head">
+      <span>✨ 今日小提示</span>
+      <button id="tip-toggle">收起</button>
+    </div>
+    <div class="tip-body" id="tip-body">
+      <span id="tip-text"></span>
+      <button id="tip-refresh">换一条 ↻</button>
+    </div>
+  </div>
+  <div class="future-card">
+    <div class="future-label">✉️ 给未来的自己一句话</div>
+    <div class="future-row">
+      <input type="text" id="input-future" placeholder="写给未来的你…" maxlength="120">
+      <button id="btn-future">存</button>
+    </div>
+    <div class="future-saved" id="future-saved"></div>
+  </div>
+  <div class="record-cols">
+    <!-- 左：High 红色区 -->
+    <section class="col col-high">
+      <h2>High</h2>
+      <div class="col-sub"></div>
+      <ul class="item-list" id="list-high"><li class="empty-tip" style="border-bottom: none;">还没有记录</li></ul>
+      <div class="add-row">
+        <input type="text" id="input-high" placeholder="记一件开心的事…" maxlength="100">
+        <button class="add-btn" data-type="high">添加</button>
+      </div>
+    </section>
+    <!-- 右：Down 蓝色区 -->
+    <section class="col col-down">
+      <h2>Down</h2>
+      <div class="col-sub" style="white-space: pre-wrap;"></div>
+      <ul class="item-list" id="list-down"><li class="empty-tip" style="border-bottom: none;">还没有记录</li></ul>
+      <div class="add-row">
+        <input type="text" id="input-down" placeholder="记一件烦心的事…" maxlength="100">
+        <button class="add-btn" data-type="down">添加</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ================= 日历弹层 ================= -->
+<div id="overlay-calendar" class="overlay">
+  <div class="overlay-header">
+    <button class="back-btn" data-close="overlay-calendar">←</button>
+    <div class="overlay-title">日历</div>
+  </div>
+  <div class="cal-nav">
+    <button id="cal-prev">‹</button>
+    <div id="cal-month-label"></div>
+    <button id="cal-next">›</button>
+  </div>
+  <div class="cal-grid" id="cal-grid"></div>
+  <div class="cal-legend">小圆 = 当天调和后的颜色 · 无记录为纯黄</div>
+</div>
+
+<!-- ================= 日期详情弹层 ================= -->
+<div id="overlay-day" class="overlay">
+  <div class="overlay-header">
+    <button class="back-btn" data-close="overlay-day">←</button>
+    <div class="overlay-title" id="day-title"></div>
+  </div>
+  <div class="day-section sec-high">
+    <h3>High</h3>
+    <ul class="day-list" id="day-high"></ul>
+  </div>
+  <div class="day-section sec-down">
+    <h3>Down</h3>
+    <ul class="day-list" id="day-down"></ul>
+  </div>
+  <div class="day-section sec-future" id="sec-future" style="display:none;">
+    <h3>✉️ 给未来的自己</h3>
+    <ul class="day-list"><li id="day-future"></li></ul>
+  </div>
+  <div class="day-section sec-notes">
+    <h3>碎碎念</h3>
+    <ul class="day-list" id="day-notes"></ul>
+  </div>
+</div>
+
+<!-- ================= 碎碎念弹层 ================= -->
+<div id="overlay-notes" class="overlay">
+  <div class="overlay-header">
+    <button class="back-btn" data-close="overlay-notes">←</button>
+    <div class="overlay-title">碎碎念</div>
+  </div>
+  <div class="note-input-row">
+    <input type="text" id="input-note" placeholder="随便写点什么…" maxlength="200">
+    <button id="btn-add-note">保存</button>
+  </div>
+  <ul class="note-list" id="note-list"></ul>
+</div>
+
+<script>
+/* =====================================================
+ * 今日色环 / Daily Color Circle
+ * 单文件应用：主页圆圈（三原色调和）+ 记录页 + 日历 + 碎碎念
+ * 数据全部保存在 localStorage，无外部依赖
+ * ===================================================== */
+
+/* ---------- 颜色常量（RGB） ---------- */
+const BASE_YELLOW = [255, 216, 77];  // #FFD84D 基础黄，权重固定参与
+const HIGH_RED    = [255, 90, 95];   // #FF5A5F High 红
+const DOWN_BLUE   = [74, 123, 208];  // #4A7BD0 Down 蓝
+
+/* ---------- 每日推荐内容库 ----------
+ * 格式：[类型, 标题, 一句推荐语]
+ * 可直接在数组末尾追加条目，无需改动任何逻辑；
+ * 当天推荐首次生成后已固化在 localStorage，新增内容只影响未来日期。
+ * ------------------------------------ */
+const DAILY_CONTENT = [
+  // —— 书 ——
+  ["书", "《小王子》", "今天也记得看看心里的那朵玫瑰。"],
+  ["书", "《挪威的森林》", "每个人都有属于自己的一片森林。"],
+  ["书", "《边城》", "去沈从文笔下的湘西，等一艘渡船。"],
+  ["书", "《目送》", "有些路啊，只能一个人走。"],
+  ["书", "《解忧杂货店》", "认真回信的人，也在被生活温柔回答。"],
+  ["书", "《山茶文具店》", "替人写信的人，最懂字里的人情。"],
+  ["书", "《蛤蟆先生去看心理医生》", "允许自己今天只是普通地好起来。"],
+  ["书", "《被讨厌的勇气》", "课题分离一下，会轻松很多。"],
+  ["书", "《瓦尔登湖》", "把生活过简单一点，湖水就清澈了。"],
+  ["书", "《月亮与六便士》", "低头捡钱时，也抬头看看月亮。"],
+  ["书", "《追风筝的人》", "为你，千千万万遍。"],
+  ["书", "《一个叫欧维的男人决定去死》", "固执的人心里，往往藏着最软的地方。"],
+  ["书", "《我与地坛》", "在废墟里，史铁生想明白了生死。"],
+  ["书", "《云边有个小卖部》", "云边镇的风，会吹走一点疲惫。"],
+  ["书", "《人间草木》", "汪曾祺写草木，像在写老朋友。"],
+  // —— 诗 ——
+  ["诗", "《面朝大海，春暖花开》", "今天试着给生活留一点明亮的想象。"],
+  ["诗", "《再别康桥》", "轻轻的来，也轻轻的走。"],
+  ["诗", "《雨巷》", "撑一把伞，走进戴望舒的江南。"],
+  ["诗", "《假如生活欺骗了你》", "普希金说：忧郁的日子总会过去。"],
+  ["诗", "《未选择的路》", "另一条路上的风景，就留给想象吧。"],
+  ["诗", "《一棵开花的树》", "席慕蓉写尽了等待的姿态。"],
+  ["诗", "《我喜欢你是寂静的》", "安静也是一种很深的表达。"],
+  ["诗", "《天真的预言》", "一沙一世界，一花一天堂。"],
+  ["诗", "《你是人间的四月天》", "你是爱，是暖，是希望。"],
+  ["诗", "《断章》", "你站在桥上看风景。"],
+  ["诗", "《从前慢》", "从前的日色变得慢，车马邮件都慢。"],
+  ["诗", "《生如夏花》", "泰戈尔说，要活得像夏天一样用力。"],
+  // —— 电影 ——
+  ["电影", "《海街日记》", "四姐妹、老房子和一坛青梅酒。"],
+  ["电影", "《小森林》", "一个人做饭，也能把日子过成诗。"],
+  ["电影", "《步履不停》", "是枝裕和教你原谅平淡的生活。"],
+  ["电影", "《情书》", "你好吗？我很好。"],
+  ["电影", "《千与千寻》", "别忘记自己的名字。"],
+  ["电影", "《龙猫》", "相信的人才能看见。"],
+  ["电影", "《天空之城》", "久石让的配乐会托着你飞。"],
+  ["电影", "《布达佩斯大饭店》", "对称构图里的粉色童话。"],
+  ["电影", "《白日梦想家》", "去看看世界，去面对危险。"],
+  ["电影", "《怦然心动》", "有人住高楼，有人在深沟，有人光芒万丈。"],
+  ["电影", "《爱乐之城》", "献给做梦的人，尽管他们看起来很傻。"],
+  ["电影", "《海蒂和爷爷》", "阿尔卑斯的雪和羊，治愈一切。"],
+  ["电影", "《重庆森林》", "凤梨罐头会过期，喜欢不会。"],
+  ["电影", "《一一》", "电影发明以后，人类的生命延长了三倍。"],
+  ["电影", "《陪安东尼度过漫长岁月》", "不二兔陪你走一段不慌不忙的路。"],
+  // —— 文章 ——
+  ["文章", "《背影》", "朱自清写父亲爬月台买橘子那一幕。"],
+  ["文章", "《秋天的怀念》", "好好儿活，是史铁生欠母亲的回答。"],
+  ["文章", "《孩子你慢慢来》", "龙应台愿意等一生，等你从容走来。"],
+  ["文章", "《给我的孩子们》", "丰子恺羡慕孩子最真的心。"],
+  ["文章", "《我的阿勒泰》", "李娟笔下的北疆，辽阔又好笑。"],
+  ["文章", "《沙漠中的饭店》", "三毛把撒哈拉过成了家。"],
+  ["文章", "《一只特立独行的猪》", "王小波教你别被生活设置。"],
+  ["文章", "《济南的冬天》", "老舍说，济南的冬天是响晴的。"],
+  ["文章", "《泥泞》", "迟子建说，泥泞也会诞生一种美。"],
+  ["文章", "《春酒》", "琦君的一杯春酒，泡着整个故乡。"],
+  // —— 音乐 ——
+  ["音乐", "久石让《Summer》", "三分钟的夏天，从钢琴里流出来。"],
+  ["音乐", "坂本龙一《Merry Christmas Mr. Lawrence》", "雪落下来之前，先听完这首。"],
+  ["音乐", "《秋日私语》", "适合午后窗边循环的钢琴曲。"],
+  ["音乐", "陈绮贞《旅行的意义》", "你收集了地图上每一次的风和日丽。"],
+  ["音乐", "五月天《温柔》", "不打扰，是我的温柔。"],
+  ["音乐", "朴树《平凡之路》", "平凡才是唯一的答案。"],
+  ["音乐", "李健《贝加尔湖畔》", "多想某天往日又重现。"],
+  ["音乐", "周杰伦《晴天》", "刮风这天，我试过握着你手。"],
+  ["音乐", "房东的猫《云烟成雨》", "我多想越过谎言去拥抱你。"],
+  ["音乐", "好妹妹《一个人的北京》", "北漂夜里最温柔的一首歌。"],
+  ["音乐", "Yiruma《River Flows in You》", "让河水替你说没说出口的话。"],
+  ["音乐", "王菲《匆匆那年》", "如果再见不能红着眼，是否还能红着脸。"],
+  // —— 播客 ——
+  ["播客", "《故事FM》", "听听普通人讲自己的一生。"],
+  ["播客", "《日谈公园》", "像朋友闲聊一样涨知识。"],
+  ["播客", "《忽左忽右》", "从历史褶皱里打捞故事。"],
+  ["播客", "《随机波动》", "三个女生的文化观察。"],
+  ["播客", "《八分》", "梁文道陪你一起看世界。"],
+  ["播客", "《得意忘形》", "关于内在成长的轻松对话。"],
+  ["播客", "《不合时宜》", "与时代保持一点距离的思考。"],
+  ["播客", "《文化有限》", "一本书聊一期，读完等于读过。"],
+  // —— 展览 ——
+  ["展览", "身边美术馆的常设展", "免费或便宜，却常常被路过。"],
+  ["展览", "博物馆青铜器展", "三千年前的纹样，比想象中摩登。"],
+  ["展览", "一场摄影双年展", "看别人如何按下快门的瞬间。"],
+  ["展览", "插画师小型个展", "小展的好处：人少，看得慢。"],
+  ["展览", "城市档案馆老照片展", "在你出生前的街道走一走。"],
+  ["展览", "自然博物馆标本展", "一只鸟的美，隔着玻璃也拦不住。"],
+  ["展览", "独立书店的主题书展", "店主的选书品味，就是一场展览。"],
+  ["展览", "街角画廊新锐绘画展", "年轻画家的第一笔勇气。"],
+  // —— 句子 ——
+  ["句子", "「慢慢来，比较快。」", "允许事情按它自己的节奏发生。"],
+  ["句子", "「日日是好日。」", "平常日子，也有平常的好。"],
+  ["句子", "「人间值得。」", "中村恒子奶奶九十年的心得。"],
+  ["句子", "「凡是过往，皆为序章。」", "莎士比亚这句话适合新的一周。"],
+  ["句子", "「生活明朗，万物可爱。」", "今天也试着这样想一次。"],
+  ["句子", "「不要慌，太阳下山有月光。」", "它不会一直沉下去。"],
+  ["句子", "「种一棵树最好的时间是十年前，其次是现在。」", "想做的事，现在开始就不晚。"],
+  ["句子", "「你要悄悄拔尖，然后惊艳所有人。」", "更希望你是为自己悄悄努力。"],
+  ["句子", "「无所事事也是一种正经事。」", "今天允许自己发一会儿呆。"],
+  ["句子", "「人间烟火气，最抚凡人心。」", "去楼下闻一闻晚饭的味道吧。"],
+  ["句子", "「山不过来，我就过去。」", "换个方向，问题常有新解。"],
+  ["句子", "「心中有丘壑，眉目作山河。」", "愿你眼里一直有光。"],
+  // —— 小练习 ——
+  ["小练习", "散步十分钟", "不带手机也行，就看看路。"],
+  ["小练习", "写下三件小确幸", "再小的事也算数。"],
+  ["小练习", "给一位旧朋友发条消息", "一句「最近好吗」就够了。"],
+  ["小练习", "整理桌面五分钟", "桌面清爽，脑子也清爽。"],
+  ["小练习", "今天比昨天早睡半小时", "困了就放过自己。"],
+  ["小练习", "慢慢喝一杯温水", "认真喝，感受温度。"],
+  ["小练习", "看云十分钟", "躺着看，姿势不限。"],
+  ["小练习", "手写一张明信片", "寄给未来的自己也不错。"],
+  ["小练习", "认识一种新植物", "路边遇到的，查查它叫什么。"],
+  ["小练习", "关掉手机一小时", "世界不会因此塌下来。"],
+  ["小练习", "拍一张今天的天空", "存起来，月底翻着看。"],
+  ["小练习", "做三次深呼吸", "吸四秒，停四秒，呼六秒。"],
+  // —— 生活灵感 ——
+  ["生活灵感", "在阳台种一盆薄荷", "掐两片叶子就能泡水。"],
+  ["生活灵感", "换一套干净的床单", "幸福感提升最快的操作。"],
+  ["生活灵感", "去早市买菜做一顿饭", "和摊主聊两句，比外卖香。"],
+  ["生活灵感", "给自己认真泡一壶茶", "烫杯、投茶、等水开。"],
+  ["生活灵感", "用手账记一周的花销", "钱去哪了，一目了然。"],
+  ["生活灵感", "学做一道简单的汤", "番茄蛋汤也算数。"],
+  ["生活灵感", "不带目的地坐一趟公交", "随机下车，看看陌生街区。"],
+  ["生活灵感", "收拾出一个阅读角落", "一盏灯、一把椅、一本书。"],
+  ["生活灵感", "给窗户挂一条轻纱帘", "光会变得柔软。"],
+  ["生活灵感", "睡前读二十分钟纸质书", "比刷手机睡得香。"],
+  // —— 短篇 ——
+  ["短篇", "契诃夫《变色龙》", "十五分钟读完，笑完会沉默。"],
+  ["短篇", "欧·亨利《麦琪的礼物》", "贫穷夫妻最贵的礼物。"],
+  ["短篇", "卡夫卡《变形记》", "一早醒来，变成了甲虫。"],
+  ["短篇", "芥川龙之介《罗生门》", "善恶就在一念之间。"],
+  ["短篇", "汪曾祺《受戒》", "水乡、小和尚和小英子。"],
+  ["短篇", "鲁迅《社戏》", "那夜豆是好豆，戏是好戏。"],
+  ["短篇", "郁达夫《春风沉醉的晚上》", "和一个陌生女工的春夜。"],
+  ["短篇", "太宰治《奔跑吧梅洛斯》", "为了信任拼命奔跑的人。"],
+  ["短篇", "博尔赫斯《小径分岔的花园》", "时间在这里分岔成无数可能。"],
+  ["短篇", "莫泊桑《项链》", "一条项链，十年光阴。"]
+];
+
+/* ---------- 特殊日子 & 问候语 ---------- */
+const SPECIAL_DAYS = [
+  { m: 1,  d: 1,  name: "元旦",   wish: "新的一年，慢慢来。" },
+  { m: 2,  d: 14, name: "情人节", wish: "对在意的人，也对自己，好一点。" },
+  { m: 3,  d: 8,  name: "妇女节", wish: "今天好好爱自己。" },
+  { m: 4,  d: 5,  name: "清明",   wish: "记得也温柔地待自己。" },
+  { m: 5,  d: 1,  name: "劳动节", wish: "也给自己放个小假。" },
+  { m: 6,  d: 1,  name: "儿童节", wish: "心里那个小孩，今天也过节。" },
+  { m: 9,  d: 10, name: "教师节", wish: "谢谢曾经点过你一下的人。" },
+  { m: 10, d: 1,  name: "国庆节", wish: "难得松弛一下。" },
+  { m: 12, d: 25, name: "圣诞节", wish: "许个温柔的小愿望吧。" }
+];
+
+/* 每日小提示：按 High(up)/Down(down) 情况分 6 档，随机选取（可看可不看）。
+ * none 未记录 / highBig·highWin 偏 High(鼓励) / balanced 持平(接纳) / downWin·downBig 偏 Down(安慰+提醒) */
+const TIP_POOL = {
+  none: [
+    "今天还空着，先从一件小小的事开始记。", "出门了吗？下楼走十分钟，也值得记一笔。",
+    "认真吃一顿饭，就是今天的小确幸。", "晒晒太阳、看看绿色植物，心情会亮一点。",
+    "空白也是今天的一部分，慢慢来。", "记得喝够水，这也是在照顾自己。",
+    "给未来的自己写一句温柔的期待吧。", "先写下第一件让你有感觉的事。",
+    "听听喜欢的歌，让今天有个开场。"
+  ],
+  highBig: [
+    "今天亮点不少，真的替你开心！", "好事在悄悄积累，带着它往前走。",
+    "这些闪光时刻，值得被好好记住。", "状态这么好，也记得分一点给明天。",
+    "开心就大声记下来，它在给你充电。", "今天像个小太阳，继续保持呀。",
+    "把这份开心分享给某个人吧。", "记录下来的快乐，回头翻会很甜。",
+    "这么棒的日子，值得一杯奶茶庆祝。"
+  ],
+  highWin: [
+    "好事多一些，今天的底色是暖暖的。", "有高光的日子，别忘了犒劳自己。",
+    "顺的时候，也允许自己慢半拍。", "把开心的事写具体，快乐会更牢。",
+    "今天运气不错，记得心存感激。", "高点也别忘了照顾身体和情绪。",
+    "好状态值得庆祝，怎么高兴怎么来。", "留意这些好事为什么发生，试着复制它。"
+  ],
+  balanced: [
+    "有起有落，才是真实的一天。", "高低相抵，其实很难得。",
+    "甜和苦都尝过，挺好。", "平静过完一天，也是一种成就。",
+    "起伏之间，你已经做得不错。", "今天不极端，稳稳的就很好。",
+    "接纳今天的复杂，它也属于你。", "给今天一个拥抱，你平衡住了。"
+  ],
+  downWin: [
+    "今天有点沉，给自己一点喘息。", "已经很努力了，允许自己慢下来。",
+    "难熬的事，写下来就轻了一点。", "情绪低落不怪你，先抱抱自己。",
+    "去洗把脸，或下楼走十分钟。", "少刷负面新闻，给神经系统放个假。",
+    "收拾一个小角落，心也会松一点。", "允许自己懒一会儿，你在充电。",
+    "给想念的人发条消息，会好一些。", "喝够水、晒晒太阳，慢慢来。"
+  ],
+  downBig: [
+    "今天格外难，先别苛责自己。", "情绪像天气，会过去的，我陪着你。",
+    "什么都不做也可以，先好好呼吸。", "起身拉伸十五分钟，或晒会儿太阳。",
+    "窝进沙发看看天空，也是一种休息。", "允许自己难过，它值得被看见。",
+    "抱抱小猫小狗，或者抱抱自己。", "用喜欢的味道、听喜欢的歌，缓一缓。",
+    "给未来的自己写一句温柔的话。", "今晚早点睡，明天的你会谢谢今天。",
+    "你已经扛了很多，真的很棒了。"
+  ]
+};
+
+/* Down 自查小清单（化用你的①②自查表）：每条 Down 事项可展开勾选 */
+const SELF_CHECK = [
+  "今天出门了吗？", "活动身体了吗？", "房间乱了吗？", "睡够了吗？",
+  "好好吃饭了吗？", "晒太阳了吗？", "很久没见想见的人了吗？", "那几天快到了吗？"
+];
+
+/* 关键词→对症小建议：读取当天 Down 文字，命中就给对应的安慰/提醒/行动建议 */
+const KEYWORD_TIPS = [
+  { keys: ["失眠", "熬夜", "睡不着", "困"], tips: ["今晚早点睡，别再熬了。", "睡前少刷手机，让脑子歇一歇。", "缺的觉，今晚补回来。"] },
+  { keys: ["累", "疲惫", "没劲", "不想动", "乏力"], tips: ["起身拉伸十分钟，或下楼走走。", "允许自己懒一会儿，你在充电。", "没劲就歇歇，不急这一时。"] },
+  { keys: ["烦", "焦虑", "崩溃", "生气", "心累", "压力"], tips: ["烦就先深呼吸三次，吸四秒、呼六秒。", "去洗把脸，让神经系统缓一缓。", "别憋着，写出来就轻一点。"] },
+  { keys: ["饿", "没吃", "没吃饭"], tips: ["再忙也好好吃一顿。", "先填饱肚子，情绪会稳一点。"] },
+  { keys: ["一个人", "孤单", "孤独", "没人陪", "寂寞"], tips: ["给想念的人发条消息吧。", "约朋友说说话，会松很多。", "抱抱小猫小狗，或者抱抱自己。"] },
+  { keys: ["乱", "脏", "收拾"], tips: ["收拾一个小角落，心也会松一点。", "从桌面开始，一点点来。"] },
+  { keys: ["手机", "刷", "短视频", "上网"], tips: ["少刷一会儿，给神经系统放个假。", "去看看小东西：云、植物、路人。"] },
+  { keys: ["姨妈", "月经", "生理期"], tips: ["那几天允许自己懒一点。", "抱抱自己，这几天会过去的。"] },
+  { keys: ["作业", "考试", "论文", "ddl", "截止", "工作", "上班", "答辩", "赶"], tips: ["再难的任务，拆成一小步就好。", "你已经做了很多，别否定自己。", "完成比完美重要，先动起来。"] }
+];
+
+/** 主页问候语：早午晚 + 特殊日子/周末 */
+function getGreeting() {
+  const now = new Date();
+  const h = now.getHours();
+  let g;
+  if (h < 5)       g = "夜深了，也记得早点休息。";
+  else if (h < 11) g = "早安，今天也要好好照顾自己。";
+  else if (h < 14) g = "中午好，吃顿舒服的饭吧。";
+  else if (h < 18) g = "下午好，喝口水、缓一缓。";
+  else             g = "晚上好，今天辛苦啦。";
+  const sp = SPECIAL_DAYS.find(s => s.m === now.getMonth() + 1 && s.d === now.getDate());
+  if (sp) g += " 今天是" + sp.name + "，" + sp.wish;
+  else if (now.getDay() === 0 || now.getDay() === 6) g += " 周末愉快，做点让自己开心的事。";
+  return g;
+}
+
+/** 按 High/Down 情况分 6 档 */
+function tipCategory(highN, downN) {
+  if (highN === 0 && downN === 0) return "none";
+  if (highN - downN >= 2 && highN >= 2) return "highBig";
+  if (downN - highN >= 2 && downN >= 2) return "downBig";
+  if (highN > downN) return "highWin";
+  if (downN > highN) return "downWin";
+  return "balanced";
+}
+function randomTip(highN, downN) {
+  const arr = TIP_POOL[tipCategory(highN, downN)];
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+/** 关键词对症建议：命中当天 Down 文字里的关键词，返回对应一条；无命中返回 null */
+function keywordTip(downItems) {
+  const text = downItems.map(i => i.text).join(" ");
+  const matched = KEYWORD_TIPS.filter(g => g.keys.some(k => text.includes(k)));
+  if (!matched.length) return null;
+  const g = matched[Math.floor(Math.random() * matched.length)];
+  return g.tips[Math.floor(Math.random() * g.tips.length)];
+}
+
+/** 今日小提示渲染：优先关键词对症建议，否则按 up/down 档位随机；仅在“档位/命中变化”或强制时换一条 */
+let tipLastCat = null;
+function renderTip(force) {
+  const rec = getDay(currentDay);
+  const kw = keywordTip(rec.down);
+  const cat = (kw ? "kw" : "cat") + ":" + tipCategory(rec.high.length, rec.down.length);
+  if (force || cat !== tipLastCat) {
+    $("tip-text").textContent = kw || randomTip(rec.high.length, rec.down.length);
+    tipLastCat = cat;
+  }
+}
+/** 收起/展开提示（满足“可以选择看或不看”） */
+function toggleTip() {
+  const body = $("tip-body");
+  const btn = $("tip-toggle");
+  const hidden = body.classList.toggle("hidden");
+  btn.textContent = hidden ? "看提示" : "收起";
+}
+
+/* ---------- localStorage 封装 ----------
+ * 统一用安全读写：某些环境（file://、隐私模式、配额满）下 localStorage
+ * 可能抛错，必须 try/catch 兜底，否则会打断添加/删除/渲染流程。
+ * --------------------------------------- */
+const STORE_KEY = "dcc_data_v1";           // 记录数据
+const REC_PREFIX = "dcc_rec_";             // 每日推荐固化 key 前缀
+
+/** 安全读取：失败返回 null（调用方需处理无值情况） */
+function lsGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+/** 安全写入：失败静默忽略，至少保证内存中的 UI 仍然正常 */
+function lsSet(key, val) {
+  try { localStorage.setItem(key, val); } catch (e) { /* 忽略：存储不可用时仅内存生效 */ }
+}
+
+/** 读取全部记录数据：{ "YYYY-MM-DD": { high:[], down:[], notes:[] } } */
+function loadData() {
+  const raw = lsGet(STORE_KEY);
+  try { return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
+}
+let store = loadData();
+function saveStore() { lsSet(STORE_KEY, JSON.stringify(store)); }
+
+/** 取某天的数据结构（只读场景不会创建空记录） */
+function getDay(dk) {
+  return store[dk] || { high: [], down: [], notes: [] };
+}
+/** 取或创建某天的数据结构（写入场景） */
+function ensureDay(dk) {
+  if (!store[dk]) store[dk] = { high: [], down: [], notes: [] };
+  return store[dk];
+}
+/** 生成简易唯一 id */
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+/* ---------- 日期工具 ---------- */
+const WEEK_CN = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+const pad = n => String(n).padStart(2, "0");
+/** Date -> "YYYY-MM-DD" */
+function dateKey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+/** "YYYY-MM-DD" -> "2026年10月24日 周六" */
+function dateCN(dk) {
+  const [y, m, d] = dk.split("-").map(Number);
+  const w = WEEK_CN[new Date(y, m - 1, d).getDay()];
+  return `${y}年${m}月${d}日 ${w}`;
+}
+/** "YYYY-MM-DD" -> "10月24日" */
+function dateShort(dk) {
+  const [, m, d] = dk.split("-").map(Number);
+  return `${m}月${d}日`;
+}
+/** 当前时间 "21:30" */
+function nowTime() {
+  const n = new Date();
+  return pad(n.getHours()) + ":" + pad(n.getMinutes());
+}
+
+/* ---------- 颜色调和 ----------
+ * 黄色权重 = High 条数 + Down 条数 + 3（始终最高，保证色调柔和）
+ * 红色权重 = High 条数；蓝色权重 = Down 条数
+ * 最终颜色 = 三色按权重的 RGB 加权平均
+ * -------------------------------------- */
+/* 颜色调和（中 ×1.6）：
+ * 黄底权重 = High + Down + 2；每条 High 红权重 ×1.6，每条 Down 蓝权重 ×1.6。
+ * 记录越多越敢偏离黄（High→橙、Down→绿/灰、都有→棕），有黄底+亮度约束不会变纯红/纯蓝。
+ * 说明：纯 High/纯 Down 较多时，红或蓝权重会略高于黄（这是“颜色更分明”的必然取舍）。 */
+const MIX_MUL = 1.6;
+function mixedColor(highCount, downCount) {
+  const wY = highCount + downCount + 2;
+  const wR = highCount * MIX_MUL;
+  const wB = downCount * MIX_MUL;
+  const total = wY + wR + wB;
+  const r = Math.round((BASE_YELLOW[0] * wY + HIGH_RED[0] * wR + DOWN_BLUE[0] * wB) / total);
+  const g = Math.round((BASE_YELLOW[1] * wY + HIGH_RED[1] * wR + DOWN_BLUE[1] * wB) / total);
+  const b = Math.round((BASE_YELLOW[2] * wY + HIGH_RED[2] * wR + DOWN_BLUE[2] * wB) / total);
+  return [r, g, b];
+}
+function rgbStr(c) { return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; }
+
+/** 计算相对亮度，决定文字用黑还是白 */
+function luminance(c) {
+  const f = v => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+}
+/** 计算 HSL 饱和度（0~1），用于颜色取名 */
+function saturation(c) {
+  const mx = Math.max(c[0], c[1], c[2]) / 255;
+  const mn = Math.min(c[0], c[1], c[2]) / 255;
+  const l = (mx + mn) / 2;
+  if (mx === mn) return 0;
+  return l > 0.5 ? (mx - mn) / (2 - mx - mn) : (mx - mn) / (mx + mn);
+}
+/** 给当天调和色起一个温柔的名字（由 High/Down 情况决定，同一天稳定不变） */
+function colorName(highCount, downCount) {
+  if (highCount === 0 && downCount === 0) return "暖黄";
+  const c = mixedColor(highCount, downCount);
+  const S = saturation(c);
+  const total = highCount + downCount;
+  if (S < 0.13) return "暖灰";                                   // 很淡/发灰
+  if (highCount > downCount)  return total <= 2 ? "蜜橘" : (total <= 5 ? "暖橙" : "落日");
+  if (downCount > highCount)  return total <= 2 ? "初芽" : (total <= 5 ? "苔绿" : "湖水绿");
+  return S < 0.2 ? "陶土" : (total <= 3 ? "焦糖" : "栗棕");      // High/Down 持平
+}
+
+/* ---------- 每日推荐 ----------
+ * 用日期字符串哈希选一条；首次选出后固化到 localStorage，
+ * 保证当天刷新不变，且以后扩充内容库不会让当天推荐跳变。
+ * ------------------------------------ */
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+function getDailyRec(dk) {
+  const key = REC_PREFIX + dk;
+  let idx = parseInt(lsGet(key), 10);
+  if (isNaN(idx) || idx < 0 || idx >= DAILY_CONTENT.length) {
+    idx = hashStr(dk) % DAILY_CONTENT.length;
+    lsSet(key, String(idx)); // 固化当天推荐，刷新不变；扩充内容库只影响未来日期
+  }
+  const [type, title, note] = DAILY_CONTENT[idx];
+  return `【${type}】${title} —— ${note}`;
+}
+
+/* ---------- DOM 引用 ---------- */
+const $ = id => document.getElementById(id);
+const today = () => dateKey(new Date());
+const HOME = $("page-home"), RECORD = $("page-record");
+const circle = $("circle"), dateText = $("date-text"), countLine = $("count-line"), dailyRecEl = $("daily-rec");
+let currentDay = today(); // 当前正在查看/编辑的日期（主页始终为今天）
+
+/* ---------- 主页渲染 ---------- */
+function renderHome() {
+  currentDay = today();
+  const dk = currentDay;
+  const day = getDay(dk);
+  const color = mixedColor(day.high.length, day.down.length);
+
+  dateText.textContent = dateCN(dk);
+  countLine.textContent = `High ${day.high.length} · Down ${day.down.length} · ${colorName(day.high.length, day.down.length)}`;
+  dailyRecEl.textContent = getDailyRec(dk);
+  $("greeting").textContent = getGreeting();
+
+  // 圆圈颜色 + 文字黑白自适应（0.18 为黑/白对比度临界点，取对比更高的一方）
+  circle.style.backgroundColor = rgbStr(color);
+  const light = luminance(color) > 0.18; // 背景够亮 -> 用深色文字
+  const textColor = light ? "#3A3630" : "#FFFDF8";
+  circle.style.color = textColor;
+  // 阴影随颜色轻微变化
+  circle.style.boxShadow = `0 10px 34px ${light ? "rgba(180,165,120,0.35)" : "rgba(0,0,0,0.28)"}`;
+}
+
+/* ---------- 页面切换 ---------- */
+function showPage(id) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $(id).classList.add("active");
+}
+function openOverlay(id) { $(id).classList.add("active"); }
+function closeOverlay(id) { $(id).classList.remove("active"); }
+
+/* ---------- 今日记录页 ---------- */
+function openRecord() {
+  currentDay = today();
+  $("record-date").textContent = dateCN(currentDay);
+  renderItemList("high");
+  renderItemList("down");
+  $("input-high").value = "";
+  $("input-down").value = "";
+  // 给未来的自己一句话：预填当天已有内容
+  const fut = getDay(currentDay).future || "";
+  $("input-future").value = fut;
+  $("future-saved").textContent = fut ? "✉️ " + fut : "";
+  renderTip(true); // 进入时优先关键词对症建议，否则按 up/down 档位随机
+  showPage("page-record");
+}
+
+/** 渲染某一侧（high/down）的事项列表（含编辑 / 批注 / Down 自查） */
+function renderItemList(type) {
+  const listEl = $(type === "high" ? "list-high" : "list-down");
+  const items = getDay(currentDay)[type];
+  listEl.innerHTML = "";
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.className = "empty-tip";
+    li.style.borderBottom = "none";
+    li.textContent = "还没有记录";
+    listEl.appendChild(li);
+    return;
+  }
+  const isDown = type === "down";
+  items.forEach(it => {
+    const li = document.createElement("li");
+
+    // 主行：文本 + 时间 + 编辑 + 删除
+    const main = document.createElement("div");
+    main.className = "item-main";
+    const span = document.createElement("span");
+    span.className = "item-text";
+    span.textContent = it.text;
+    const time = document.createElement("span");
+    time.className = "item-time";
+    time.textContent = it.time;
+    const editBtn = document.createElement("button");
+    editBtn.className = "item-edit";
+    editBtn.textContent = "✎";
+    editBtn.title = "编辑";
+    const del = document.createElement("button");
+    del.className = "item-del";
+    del.textContent = "×";
+    del.title = "删除";
+    del.addEventListener("click", () => removeItem(type, it.id));
+    main.append(span, time, editBtn, del);
+
+    // 已有批注展示
+    const annoTip = document.createElement("div");
+    annoTip.className = "anno-show";
+    if (it.anno) annoTip.textContent = "📝 " + it.anno;
+    else annoTip.hidden = true;
+
+    // 操作行：批注（Down 再加“自查”）
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+    const annoBtn = document.createElement("button");
+    annoBtn.className = "anno-btn";
+    annoBtn.textContent = it.anno ? "已批注 · 改" : "批注";
+    actions.appendChild(annoBtn);
+
+    // 编辑框（默认隐藏）：改事项文字
+    const editBox = document.createElement("div");
+    editBox.className = "edit-box hidden";
+    const editInput = document.createElement("input");
+    editInput.type = "text";
+    editInput.maxLength = 100;
+    editInput.value = it.text;
+    const editSave = document.createElement("button");
+    editSave.className = "anno-save";
+    editSave.textContent = "保存";
+    editBox.append(editInput, editSave);
+    editBtn.addEventListener("click", () => {
+      const willShow = editBox.classList.toggle("hidden");
+      if (!willShow) editInput.focus();
+    });
+    editSave.addEventListener("click", () => editItem(type, it.id, editInput.value.trim()));
+
+    // 批注框（默认隐藏）
+    const annoBox = document.createElement("div");
+    annoBox.className = "anno-box hidden";
+    const annoInput = document.createElement("input");
+    annoInput.type = "text";
+    annoInput.placeholder = "加个批注…";
+    annoInput.maxLength = 120;
+    annoInput.value = it.anno || "";
+    const annoSave = document.createElement("button");
+    annoSave.className = "anno-save";
+    annoSave.textContent = "保存";
+    annoBox.append(annoInput, annoSave);
+    annoBtn.addEventListener("click", () => {
+      const willShow = annoBox.classList.toggle("hidden");
+      if (!willShow) annoInput.focus();
+    });
+    annoSave.addEventListener("click", () => setAnno(type, it.id, annoInput.value.trim()));
+
+    li.append(main, annoTip, actions, editBox, annoBox);
+
+    // Down 专属：自查小清单（可勾选，勾选状态随记录保存）
+    if (isDown) {
+      const checkBtn = document.createElement("button");
+      checkBtn.className = "check-btn";
+      checkBtn.textContent = "自查 ▾";
+      actions.appendChild(checkBtn);
+
+      const checkBox = document.createElement("div");
+      checkBox.className = "check-box hidden";
+      const checklist = it.checklist || {};
+      SELF_CHECK.forEach(label => {
+        const row = document.createElement("label");
+        row.className = "check-row";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!checklist[label];
+        cb.addEventListener("change", () => setCheck(type, it.id, label, cb.checked));
+        const txt = document.createElement("span");
+        txt.textContent = label;
+        row.append(cb, txt);
+        checkBox.appendChild(row);
+      });
+      checkBtn.addEventListener("click", () => checkBox.classList.toggle("hidden"));
+      li.append(checkBox);
+    }
+
+    listEl.appendChild(li);
+  });
+}
+
+/** 添加一条 High/Down 事项 */
+function addItem(type, text) {
+  text = text.trim();
+  if (!text) return;
+  const day = ensureDay(currentDay);
+  const item = { id: uid(), text, time: nowTime(), anno: "" };
+  if (type === "down") item.checklist = {}; // Down 才有自查清单
+  day[type].push(item);
+  saveStore();
+  renderItemList(type);
+  // 实时重算主页圆圈颜色（虽然主页此刻不可见，返回后即为最新）
+  renderHome();
+  renderTip(); // up/down 数量变化，必要时更新提示档位
+}
+/** 删除一条事项 */
+function removeItem(type, id) {
+  const day = getDay(currentDay);
+  day[type] = day[type].filter(it => it.id !== id);
+  store[currentDay] = day; // 保留空数组结构，颜色自然回退
+  saveStore();
+  renderItemList(type);
+  renderHome();
+  renderTip();
+}
+/** 编辑某条事项的文字 */
+function editItem(type, id, text) {
+  if (!text) return;
+  const day = getDay(currentDay);
+  const it = day[type].find(x => x.id === id);
+  if (it) { it.text = text; saveStore(); }
+  renderItemList(type);
+}
+/** 更新某条事项的批注 */
+function setAnno(type, id, text) {
+  const day = getDay(currentDay);
+  const it = day[type].find(x => x.id === id);
+  if (it) { it.anno = text; saveStore(); }
+  renderItemList(type);
+}
+/** 更新某条 Down 事项自查清单某一项的勾选状态 */
+function setCheck(type, id, label, val) {
+  const day = getDay(currentDay);
+  const it = day[type].find(x => x.id === id);
+  if (it) { it.checklist = it.checklist || {}; it.checklist[label] = val; saveStore(); }
+}
+/** 保存“给未来的自己一句话” */
+function setFuture(text) {
+  text = text.trim();
+  ensureDay(currentDay).future = text;
+  saveStore();
+  $("future-saved").textContent = text ? "✉️ " + text : "";
+}
+
+/* 记录页输入与按钮绑定 */
+$("input-high").addEventListener("keydown", e => {
+  if (e.key === "Enter") { addItem("high", e.target.value); e.target.value = ""; e.target.focus(); }
+});
+$("input-down").addEventListener("keydown", e => {
+  if (e.key === "Enter") { addItem("down", e.target.value); e.target.value = ""; e.target.focus(); }
+});
+document.querySelectorAll(".add-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const type = btn.dataset.type;
+    const input = $(type === "high" ? "input-high" : "input-down");
+    addItem(type, input.value);
+    input.value = "";
+    input.focus();
+  });
+});
+
+/* ---------- 日历 ---------- */
+let calYear, calMonth; // 日历当前显示的年月（month: 0-11）
+function openCalendar() {
+  const n = new Date();
+  calYear = n.getFullYear();
+  calMonth = n.getMonth();
+  renderCalendar();
+  openOverlay("overlay-calendar");
+}
+/** 渲染月历：周一为一周开始 */
+function renderCalendar() {
+  $("cal-month-label").textContent = `${calYear}年${calMonth + 1}月`;
+  const grid = $("cal-grid");
+  grid.innerHTML = "";
+
+  // 星期表头
+  ["一", "二", "三", "四", "五", "六", "日"].forEach(w => {
+    const d = document.createElement("div");
+    d.className = "cal-week";
+    d.textContent = w;
+    grid.appendChild(d);
+  });
+
+  const firstDay = new Date(calYear, calMonth, 1);
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  // 周一开头的偏移：JS getDay() 周日=0 -> 转为周一=0
+  let lead = (firstDay.getDay() + 6) % 7;
+  const todayKey = today();
+
+  for (let i = 0; i < lead; i++) {
+    const d = document.createElement("div");
+    d.className = "cal-cell empty";
+    grid.appendChild(d);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dk = `${calYear}-${pad(calMonth + 1)}-${pad(day)}`;
+    const rec = getDay(dk);
+    const color = mixedColor(rec.high.length, rec.down.length);
+
+    const cell = document.createElement("button");
+    cell.className = "cal-cell" + (dk === todayKey ? " today" : "");
+    const num = document.createElement("div");
+    num.className = "num";
+    num.textContent = day;
+    const mini = document.createElement("div");
+    mini.className = "mini";
+    mini.style.backgroundColor = rgbStr(color);
+    cell.append(num, mini);
+
+    // 点击查看该天摘要
+    cell.addEventListener("click", () => { openDayDetail(dk); });
+    grid.appendChild(cell);
+  }
+}
+$("cal-prev").addEventListener("click", () => {
+  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+});
+$("cal-next").addEventListener("click", () => {
+  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+});
+
+/* ---------- 日期详情弹层 ---------- */
+function openDayDetail(dk) {
+  const rec = getDay(dk);
+  const color = mixedColor(rec.high.length, rec.down.length);
+  $("day-title").textContent = `${dateShort(dk)} · ${colorName(rec.high.length, rec.down.length)} ${rgbStr(color)}`;
+
+  const fill = (id, arr, timeKey) => {
+    const ul = $(id);
+    ul.innerHTML = "";
+    if (!arr.length) {
+      ul.innerHTML = '<li class="day-none" style="background:none;border:none;">暂无</li>';
+      return;
+    }
+    arr.forEach(it => {
+      const li = document.createElement("li");
+      li.textContent = it.text;
+      const t = document.createElement("span");
+      t.className = "item-time";
+      t.textContent = it[timeKey];
+      li.appendChild(t);
+      if (it.anno) {
+        const a = document.createElement("div");
+        a.className = "day-anno";
+        a.textContent = "批注：" + it.anno;
+        li.appendChild(a);
+      }
+      ul.appendChild(li);
+    });
+  };
+  fill("day-high", rec.high, "time");
+  fill("day-down", rec.down, "time");
+  fill("day-notes", rec.notes, "datetime");
+  // 给未来的自己一句话（有才显示）
+  const fut = rec.future || "";
+  $("sec-future").style.display = fut ? "" : "none";
+  $("day-future").textContent = fut;
+  openOverlay("overlay-day");
+}
+
+/* ---------- 碎碎念 ---------- */
+function openNotes() {
+  renderNotes();
+  openOverlay("overlay-notes");
+}
+/** 渲染碎碎念列表（按时间倒序） */
+function renderNotes() {
+  const ul = $("note-list");
+  ul.innerHTML = "";
+  // 汇总所有日期的碎碎念并倒序排列（datetime 字符串可直接比较）
+  const all = [];
+  Object.keys(store).forEach(dk => {
+    (store[dk].notes || []).forEach(n => all.push(n));
+  });
+  all.sort((a, b) => b.datetime.localeCompare(a.datetime));
+
+  if (!all.length) {
+    const li = document.createElement("li");
+    li.innerHTML = '<span class="day-none" style="background:none;border:none;padding:0;">还没有碎碎念，写一条吧。</span>';
+    ul.appendChild(li);
+    return;
+  }
+  all.forEach(n => {
+    const li = document.createElement("li");
+    const body = document.createElement("div");
+    body.className = "note-body";
+    const text = document.createElement("div");
+    text.className = "note-text";
+    text.textContent = n.text;
+    const time = document.createElement("div");
+    time.className = "note-time";
+    time.textContent = n.datetime;
+    body.append(text, time);
+    const del = document.createElement("button");
+    del.className = "item-del";
+    del.textContent = "×";
+    del.addEventListener("click", () => removeNote(n.id));
+    li.append(body, del);
+    ul.appendChild(li);
+  });
+}
+/** 新增碎碎念：保存到当天的 notes，记录日期+时间 */
+function addNote(text) {
+  text = text.trim();
+  if (!text) return;
+  const dk = today();
+  ensureDay(dk).notes.push({
+    id: uid(),
+    text,
+    datetime: `${dk} ${nowTime()}`  // "2026-10-24 21:32"
+  });
+  saveStore();
+  renderNotes();
+}
+/** 删除碎碎念（在任意日期里查找） */
+function removeNote(id) {
+  Object.keys(store).forEach(dk => {
+    store[dk].notes = (store[dk].notes || []).filter(n => n.id !== id);
+  });
+  saveStore();
+  renderNotes();
+}
+$("btn-add-note").addEventListener("click", () => {
+  const input = $("input-note");
+  addNote(input.value);
+  input.value = "";
+  input.focus();
+});
+$("input-note").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    addNote(e.target.value);
+    e.target.value = "";
+  }
+});
+
+/* ---------- 事件绑定 ---------- */
+// 点击圆圈进入记录页
+circle.addEventListener("click", openRecord);
+// 返回主页
+$("btn-back-home").addEventListener("click", () => { renderHome(); showPage("page-home"); });
+// 顶部入口卡片（与圆圈互不影响）
+$("btn-open-calendar").addEventListener("click", openCalendar);
+$("btn-open-notes").addEventListener("click", openNotes);
+// 弹层关闭按钮
+document.querySelectorAll("[data-close]").forEach(btn => {
+  btn.addEventListener("click", () => closeOverlay(btn.dataset.close));
+});
+// 今日小提示：收起/展开 + 换一条随机
+$("tip-toggle").addEventListener("click", toggleTip);
+$("tip-refresh").addEventListener("click", () => {
+  const rec = getDay(currentDay);
+  // 换一条：有命中关键词就在该组里换，否则按档位重新随机
+  $("tip-text").textContent = keywordTip(rec.down) || randomTip(rec.high.length, rec.down.length);
+});
+// 给未来的自己一句话：保存（按钮或回车）
+$("btn-future").addEventListener("click", () => setFuture($("input-future").value));
+$("input-future").addEventListener("keydown", e => {
+  if (e.key === "Enter") setFuture(e.target.value);
+});
+
+/* ---------- 启动 ---------- */
+renderHome();
+</script>
+
+
+</body></html>
